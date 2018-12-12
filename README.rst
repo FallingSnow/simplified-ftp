@@ -40,12 +40,19 @@ The commands below show you how to download and setup the project for developmen
     $ git clone https://github.com/FallingSnow/simplified-ftp.git   # Download source code
     $ cd simplified-ftp                                             # Change directory to downloaded source
     $ pipenv install                                                # Install dependencies
-    $ pipenv shell                                                  # Enter python virtual environment
 
 ..
+Running the Server
+==================
 
-Note
-====
+::
 
-This project has been set up using PyScaffold 3.1. For details and usage
-information on PyScaffold see https://pyscaffold.org/.
+    $ pipenv run server   # Run server
+..
+Running the Client
+==================
+
+::
+
+    $ pipenv run client   # Run client
+..

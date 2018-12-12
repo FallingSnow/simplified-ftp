@@ -1,14 +1,19 @@
 import argparse
 import sys
+import signal
 import logging
+from time import sleep
+from queue import Queue
 
-from simplified_ftp import __version__
+from server import Server
 
 __author__ = "Ayrton Sparling"
 __copyright__ = "Ayrton Sparling"
 __license__ = "mit"
+__version__ = "0.1"
 
 _logger = logging.getLogger(__name__)
+_done = 0
 
 
 def parse_args(args):
@@ -25,12 +30,13 @@ def parse_args(args):
     parser.add_argument(
         '--version',
         action='version',
-        version='simplified-ftp {ver}'.format(ver=__version__))
+        version='simplified-ftp-server {ver}'.format(ver=__version__))
     parser.add_argument(
-        dest="n",
-        help="n-th Fibonacci number",
+        '-p',
+        '--port',
+        dest="port",
         type=int,
-        metavar="INT")
+        default=7240)
     parser.add_argument(
         '-v',
         '--verbose',
@@ -58,7 +64,6 @@ def setup_logging(loglevel):
     logging.basicConfig(level=loglevel, stream=sys.stdout,
                         format=logformat, datefmt="%Y-%m-%d %H:%M:%S")
 
-
 def main(args):
     """Main entry point allowing external calls
 
@@ -67,9 +72,18 @@ def main(args):
     """
     args = parse_args(args)
     setup_logging(args.loglevel)
-    _logger.debug("Starting crazy calculations...")
-    _logger.info("Script ends here")
+    _logger.debug("Starting server...")
 
+    server = Server(_logger, {})
+    server.listen(args.port)
+
+    def close_server(sig, frame):
+        print("Closing Server Cleanly")
+        server.close()
+
+    # This listens for sigint (ctrl-c) and calls an inline function (lambda) to
+    # stop the server
+    signal.signal(signal.SIGINT, close_server)
 
 def run():
     """Entry point for console_scripts
