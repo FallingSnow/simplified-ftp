@@ -29,6 +29,7 @@ Ensure you have the following dependencies install on your machine before follow
 
 * `Pipenv <https://pypi.org/project/pipenv/>`_ 2018.11.26
 
+* Linux Machine (Uses epoll so linux only)
 
 Setup
 =====
