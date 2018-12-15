@@ -1,14 +1,11 @@
-[[source]]
-name = "simplified_ftp"
-url = "https://github.com/FallingSnow/simplified-ftp.git"
-verify_ssl = true
-
 [scripts]
-server = "python ./src/server"
+server = "python ./src/ server"
+client = "python ./src/ client"
 
 [dev-packages]
 
 [packages]
+crc32c = "*"
 
 [requires]
 python_version = "3.7"

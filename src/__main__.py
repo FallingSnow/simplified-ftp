@@ -2,9 +2,8 @@ import argparse
 import sys
 import signal
 import logging
-from time import sleep
-from queue import Queue
 
+from client import Client
 from server import Server
 
 __author__ = "Ayrton Sparling"
@@ -26,13 +25,16 @@ def parse_args(args):
       :obj:`argparse.Namespace`: command line parameters namespace
     """
     parser = argparse.ArgumentParser(
-        description="Just a Fibonnaci demonstration")
+        description="The SimFTP file transfer system")
     parser.add_argument(
         '--version',
         action='version',
-        version='simplified-ftp-server {ver}'.format(ver=__version__))
+        version='simplified-ftp-client {ver}'.format(ver=__version__))
     parser.add_argument(
-        '-p',
+        '--host',
+        dest="host",
+        default="127.0.0.1")
+    parser.add_argument(
         '--port',
         dest="port",
         type=int,
@@ -51,6 +53,11 @@ def parse_args(args):
         help="set loglevel to DEBUG",
         action='store_const',
         const=logging.DEBUG)
+    parser.add_argument(
+        "system",
+        help="start either the client or server",
+        choices=['server', 'client']
+    )
     return parser.parse_args(args)
 
 
@@ -64,6 +71,21 @@ def setup_logging(loglevel):
     logging.basicConfig(level=loglevel, stream=sys.stdout,
                         format=logformat, datefmt="%Y-%m-%d %H:%M:%S")
 
+
+def start_client(args):
+    client = Client(_logger, {})
+    client.connect(args.port, args.host)
+
+    return client
+
+
+def start_server(args):
+    server = Server(_logger, {})
+    server.listen(args.port)
+
+    return server
+
+
 def main(args):
     """Main entry point allowing external calls
 
@@ -72,18 +94,23 @@ def main(args):
     """
     args = parse_args(args)
     setup_logging(args.loglevel)
-    _logger.debug("Starting server...")
+    _logger.debug("Starting client...")
 
-    server = Server(_logger, {})
-    server.listen(args.port)
+    if args.system == 'server':
+        connection = start_server(args)
+    elif args.system == 'client':
+        connection = start_client(args)
+        connection.commandQueue.put(connection.sendFile("/tmp/sending.txt"))
 
-    def close_server(sig, frame):
-        print("Closing Server Cleanly")
-        server.close()
+    # This function is called when a sigint is caught and closes the server
+    def close(sig, frame):
+        _logger.info("Closing service cleanly...")
+        connection.close()
 
     # This listens for sigint (ctrl-c) and calls an inline function (lambda) to
-    # stop the server
-    signal.signal(signal.SIGINT, close_server)
+    # stop the server (Only works on non-windows)
+    signal.signal(signal.SIGINT, close)
+
 
 def run():
     """Entry point for console_scripts
