@@ -5,6 +5,8 @@ from crc32c import crc32
 #
 # Checksums are CRC-32C. All messages end it a \0 termination character.
 #
+# Messages are UTF-8 encoded with a binary CONTENT field.
+#
 # FileStart: [PROTOCOL]/[VERSION] [ID] [TYPE] [FILENAME] [CONTENT] [CHECKSUM]\0
 #   Example: SimFTP/0.1 38274 0 file.txt laseuybjaw3blk23r89nzjx 7DD9F3E8\0
 # FilePart: [PROTOCOL]/[VERSION] [ID] [TYPE] [CONTENT] [CHECKSUM]\0
@@ -30,9 +32,9 @@ class MessageType(IntFlag):
 
 # Message formats are the layout for each packet of a certain message type
 MESSAGE_FORMATS = {
-    MessageType.FileStart: "{protocol}/{version} {id} {type} {filename} {content} ",
-    MessageType.FilePart: "{protocol}/{version} {id} {type} {content} ",
-    MessageType.FileEnd: "{protocol}/{version} {id} {type} {content} ",
+    MessageType.FileStart: "{self.protocol}/{self.version} {self.id} {self.type} {self.filename} ",
+    MessageType.FilePart: "{self.protocol}/{self.version} {self.id} {self.type} ",
+    MessageType.FileEnd: "{self.protocol}/{self.version} {self.id} {self.type} ",
 }
 
 
@@ -45,29 +47,31 @@ class Message:
         version=VERSION,
         id=0,
         type=0,
-        content=""
+        content=b""
     )) + 8 + 1  # +8 for checksum, +1 for \0 (one control character)
-    MAXIMUM_SIZE = MINIMUM_SIZE + 1024
 
-    def __init__(self, id, type, filename="", content=""):
+    def __init__(self, **params):
 
         # Define protocol and version of the message.
         # These are predefined based on the version of simplified-ftp
         self.protocol = Message.PROTOCOL  # params.protocol
         self.version = Message.VERSION  # params.version
-        self.id = id
-        self.type = type
+        self.id = params['id']
+        self.type = params['type']
 
         # Define addition properties on message based on message type
         if self.type == MessageType.FileStart:
-            self.filename = filename
+            self.filename = params['filename']
         if self.type in MessageType.File:
-            self.content = content
+            self.content = params['content']
 
     def fromBytes(bytes):
 
-        assert len(bytes) <= Message.MAXIMUM_SIZE and len(
-            bytes) >= Message.MINIMUM_SIZE
+        print(bytes)
+
+        assert len(bytes) >= Message.MINIMUM_SIZE
+
+        params = {}
 
         # ### Validate message checksum
         # Get checksum from bytes
@@ -91,18 +95,16 @@ class Message:
         # ID has a variable length and is delimited by a single space.
         # Therefore we look for the next space after the space after version
         idEnd = bytes.find(b' ', 11)
-        id = int(bytes[10:idEnd].decode('utf-8'))
+        params['id'] = int(bytes[10:idEnd].decode('utf-8'))
 
         # Same as id, type is variable length
         typeEnd = bytes.find(b' ', idEnd + 1)
-        type = MessageType(int(bytes[idEnd + 1:typeEnd].decode('utf-8')))
-
-
+        params['type'] = MessageType(int(bytes[idEnd + 1:typeEnd].decode('utf-8')))
 
         # ### Do some message data validation
 
         # Ensure the supplied type is a known message type.
-        if type.name is None:
+        if params['type'].name is None:
             raise RuntimeError("Invalid message type: {}".format(type))
 
         # Ensure the supplied protocol is the expect protocol
@@ -116,36 +118,34 @@ class Message:
                 "Unknown protocol version: {}".format(version.decode()))
 
         # Add additional properties to the message depending on message type
-        if type == MessageType.FileStart:
+        if params['type'] == MessageType.FileStart:
             filenameEnd = bytes.find(b' ', typeEnd + 1)
-            filename = bytes[typeEnd + 1:filenameEnd].decode('utf-8')
-            content = bytes[filenameEnd + 1:-9].decode('utf-8')
+            params['filename'] = bytes[typeEnd + 1:filenameEnd].decode('utf-8')
+            params['content'] = bytes[filenameEnd + 1:-9]
 
         # FilePart & FileEnd will have contents after their message type field
-        elif type == Message.FilePart or type == Message.FileEnd:
-            content = bytes[typeEnd + 1:-9].decode('utf-8')
+        elif params['type'] == MessageType.FilePart or params['type'] == MessageType.FileEnd:
+            params['content'] = bytes[typeEnd + 1:-9]
 
         # Construct a new message and return it
-        return Message(id=id, type=type, filename=filename, content=content)
+        return Message(**params)
 
     def toBytes(self):
 
         # Use MESSAGE_FORMATS[type] to define the basic structure of the message
         bytes = MESSAGE_FORMATS[self.type].format(
-            protocol=self.protocol,
-            version=self.version,
-            id=self.id,
-            type=self.type.value,
-            filename=self.filename,
-            content=self.content
+            self=self
         ).encode('utf-8')
+
+        # Add message content
+        if self.type in MessageType.File:
+            bytes += self.content + " ".encode('utf-8')
 
         # Calculate and append the crc32 checksum in hex
         bytes += "{}\0".format(hex(crc32(bytes))[2:]).encode('utf-8')
 
         # Ensure our message fufills the basic requirements
-        assert len(bytes) <= Message.MAXIMUM_SIZE and len(
-            bytes) >= Message.MINIMUM_SIZE
+        assert len(bytes) >= Message.MINIMUM_SIZE
 
         # Return our generated message bytes
         return bytes

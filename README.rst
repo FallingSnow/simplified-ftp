@@ -46,6 +46,8 @@ The commands below show you how to download and setup the project for developmen
 Running the Server
 ==================
 
+Files are written to the :code:`/tmp` directory.
+
 ::
 
     $ pipenv run server -vv   # Run server
@@ -53,7 +55,9 @@ Running the Server
 Running the Client
 ==================
 
+Send a big test file:
+
 ::
 
-    $ pipenv run client -vv   # Run client
+    # pipenv run client -vv --send tests/data/big.txt
 ..

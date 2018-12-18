@@ -3,6 +3,7 @@ from message import Message, MessageType
 import queue
 import socket
 import select
+import os
 
 
 class Client:
@@ -43,11 +44,15 @@ class Client:
     def sendFile(self, filepath):
         offset = 0
         segmentSize = self.config['file_segment_size']
-        with open(filepath, 'r') as file:
+        endSent = False
+        filename = os.path.basename(filepath)
+
+        # Open a file to read from
+        with open(filepath, 'rb') as file:
             file.seek(offset)
             fileBuffer = file.read(segmentSize)
             offset += len(fileBuffer)
-            yield Message(id=self.getMessageId(), type=MessageType.FileStart, filename="hello.txt", content=fileBuffer)
+            yield Message(id=self.getMessageId(), type=MessageType.FileStart, filename=filename, content=fileBuffer)
 
             file.seek(offset)
             fileBuffer = file.read(segmentSize)
@@ -55,12 +60,16 @@ class Client:
             while len(fileBuffer) != 0:
                 if len(fileBuffer) < segmentSize:
                     yield Message(id=self.getMessageId(), type=MessageType.FileEnd, content=fileBuffer)
+                    endSent = True
                     break
                 else:
-                    yield Message(id=self.getMessageId(), type=MessageType.filePart, content=fileBuffer)
+                    yield Message(id=self.getMessageId(), type=MessageType.FilePart, content=fileBuffer)
                     file.seek(offset)
                     fileBuffer = file.read(segmentSize)
                     offset += len(fileBuffer)
+            file.close()
+        if not endSent:
+            yield Message(id=self.getMessageId(), type=MessageType.FileEnd, content=b"")
 
     def loop(self):
         transmittingMessages = {}
@@ -84,6 +93,8 @@ class Client:
                             command = self.commandQueue.get(
                                 True, self.config['command_queue_timeout'])
 
+                            # Commands are generators so we can iterate over them
+                            # to get all of their messages.
                             for message in command:
                                 transmittingMessages[message.id] = message
                                 self._logger.debug(

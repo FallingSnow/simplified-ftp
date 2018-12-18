@@ -58,6 +58,12 @@ def parse_args(args):
         help="start either the client or server",
         choices=['server', 'client']
     )
+    parser.add_argument(
+        "-s",
+        "--send",
+        metavar="PATH",
+        help="path to file that client should send to server",
+    )
     return parser.parse_args(args)
 
 
@@ -100,11 +106,12 @@ def main(args):
         connection = start_server(args)
     elif args.system == 'client':
         connection = start_client(args)
-        connection.commandQueue.put(connection.sendFile("/tmp/sending.txt"))
+        if args.send:
+            connection.commandQueue.put(connection.sendFile(args.send))
 
     # This function is called when a sigint is caught and closes the server
     def close(sig, frame):
-        _logger.info("Closing service cleanly...")
+        _logger.info("Closing service...")
         connection.close()
 
     # This listens for sigint (ctrl-c) and calls an inline function (lambda) to

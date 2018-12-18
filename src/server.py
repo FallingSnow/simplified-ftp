@@ -12,6 +12,7 @@ class Server:
         # Setup config with defaults
         self.config = {
             'event_timeout': 0.2,
+            'internal_recv_size': 8192
         }
         self.config.update(config)
 
@@ -59,11 +60,11 @@ class Server:
         # This close helper function that just closes a connection and cleans up
         # after it.
         def closeConnection(fileno):
-            if files[fileno]:
+            if fileno in files:
                 files[fileno].close()
+                del files[fileno]
             epoll.unregister(fileno)
             connections[fileno].close()
-            del connections[fileno]
 
         # See http://scotdoyle.com/python-epoll-howto.html for a detailed
         # explination on the epoll interface
@@ -103,7 +104,7 @@ class Server:
                     elif event & select.EPOLLIN:
 
                         # Try to receive data from our client
-                        buffer = connections[fileno].recv(Message.MINIMUM_SIZE)
+                        buffer = connections[fileno].recv(self.config['internal_recv_size'])
 
                         # If we get an empty message, when know the communication channel
                         # has been closed
@@ -128,14 +129,14 @@ class Server:
 
                                 # Attempt to convert our packet into a message
                                 message = Message.fromBytes(messageBuffer)
-                                self._logger.debug("Got valid message!")
+                                self._logger.debug("Got a {} message!".format(message.type.name))
 
                                 # ### Process the message depending on what type of message it is
                                 if message.type == MessageType.FileStart:
 
                                     # If FileStart, open a new file for writing to
                                     files[fileno] = open(
-                                        "/tmp/{0}".format(message.filename), "w")
+                                        "/tmp/{0}".format(message.filename), "wb")
                                     self._logger.debug(
                                         "Opened: {}".format(message.filename))
 
@@ -148,8 +149,8 @@ class Server:
                                     # All File message types have a content, lets write that to the
                                     # file.
                                     files[fileno].write(message.content)
-                                    self._logger.debug("Wrote \"{}\" to {}".format(
-                                        message.content, message.filename))
+                                    self._logger.debug("Wrote {}.".format(
+                                        message.content))
 
                                 # We can go ahead and close the file if we receive a FileEnd message
                                 if message.type == MessageType.FileEnd:
@@ -189,7 +190,7 @@ class Server:
                         # Truncate our response buffer (remove the part that is
                         # already sent)
                         responses[fileno] = responses[fileno][numBytesWritten:]
-                        print(responses[fileno])
+                        self._logger.debug(responses[fileno])
 
                         if len(responses[fileno]) == 0:
                             epoll.modify(fileno, select.EPOLLIN)
@@ -198,11 +199,12 @@ class Server:
                     elif event & select.EPOLLHUP:
                         self._logger.debug("Connection closed!")
                         closeConnection(fileno)
+                        del connections[fileno]
         finally:
 
             # Close all open connections
             self._logger.debug("Closing connections...")
-            for fileno, connection in connections.items():
+            for fileno in connections:
                 closeConnection(fileno)
 
             # Unregister our server socket with our epoll
