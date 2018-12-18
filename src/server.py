@@ -19,16 +19,31 @@ class Server:
         # See the commented out section in run for more info
         self.msgQueue = Queue()
 
+        # Open a new socket to listen on
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        # Set the socket to reuse old port if server is restarted
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        # This is set to true when we want to end the server loop
         self.done = False
 
     def listen(self, port, addr='0.0.0.0'):
+
+        # Sets the interface and port number for the socket to listen for connections
+        # on.
         self.socket.bind((addr, port))
         self.socket.listen(1)
+
+        # In order to prevent locking up the main thread, we start a new child thread.
+        # This child thread will continously run the server's loop function and
+        # check self.done periodically if to see if it should end
         thread = Thread(target=self.loop, args=())
         thread.start()
+
         self._logger.debug("Server listening on {}".format(port))
+
+        # We will return the thread handle so that it can be acted on in the future
         return thread
 
     def close(self):
@@ -41,6 +56,8 @@ class Server:
         responses = {}
         files = {}
 
+        # This close helper function that just closes a connection and cleans up
+        # after it.
         def closeConnection(fileno):
             if files[fileno]:
                 files[fileno].close()
@@ -51,8 +68,13 @@ class Server:
         # See http://scotdoyle.com/python-epoll-howto.html for a detailed
         # explination on the epoll interface
         epoll = select.epoll()
+
+        # We register our socket server in EPOLLIN mode to watch for incomming
+        # connections.
         epoll.register(self.socket.fileno(), select.EPOLLIN)
         try:
+
+            # Check if we should end our loop
             while not self.done:
                 # # Check queue events (messages from parent)
                 # while not self.msgQueue.empty():
@@ -61,6 +83,8 @@ class Server:
 
                 # This will return any new events
                 events = epoll.poll(self.config['event_timeout'])
+
+                # Process any new events
                 for fileno, event in events:
                     if fileno == self.socket.fileno():
                         client, address = self.socket.accept()
@@ -68,6 +92,7 @@ class Server:
                         self._logger.info(
                             "New connection from {0}".format(address))
 
+                        # Register incomming client connection with our epoll interface
                         epoll.register(client.fileno(), select.EPOLLIN)
 
                         # Store our client in a connections dictionary
@@ -92,31 +117,54 @@ class Server:
                         # Add this events buffer to our overall buffer
                         buffers[fileno] += buffer
 
+                        # Our packets are terminated with a null terminator (\0).
+                        # If we find one we know we have received a whole packet.
                         packetMarkerPosition = buffers[fileno].find(b'\0')
                         while packetMarkerPosition != -1:
                             try:
+
+                                # Extract our packet from the buffer
                                 messageBuffer = buffers[fileno][:packetMarkerPosition]
+
+                                # Attempt to convert our packet into a message
                                 message = Message.fromBytes(messageBuffer)
                                 self._logger.debug("Got valid message!")
+
+                                # ### Process the message depending on what type of message it is
                                 if message.type == MessageType.FileStart:
+
+                                    # If FileStart, open a new file for writing to
                                     files[fileno] = open(
                                         "/tmp/{0}".format(message.filename), "w")
                                     self._logger.debug(
                                         "Opened: {}".format(message.filename))
 
                                 if message.type in MessageType.File:
+
+                                    # Check if a file was never opened for this connection
                                     if fileno not in files:
                                         raise RuntimeError("No file selected")
+
+                                    # All File message types have a content, lets write that to the
+                                    # file.
                                     files[fileno].write(message.content)
                                     self._logger.debug("Wrote \"{}\" to {}".format(
                                         message.content, message.filename))
 
+                                # We can go ahead and close the file if we receive a FileEnd message
                                 if message.type == MessageType.FileEnd:
                                     files[fileno].close()
+
+                            # If we have any issues running the above code, such as failing to
+                            # parse the incoming bytes into a valid message, we should log that
+                            # error.
                             except RuntimeError as err:
                                 self._logger.error(err)
                             finally:
+                                # Trim the buffer of packet we just processed
                                 buffers[fileno] = buffers[fileno][packetMarkerPosition + 1:]
+
+                                # Check if there is another whole packet in the buffer
                                 packetMarkerPosition = buffers[fileno].find(
                                     b'\0')
 
@@ -151,12 +199,17 @@ class Server:
                         self._logger.debug("Connection closed!")
                         closeConnection(fileno)
         finally:
+
+            # Close all open connections
             self._logger.debug("Closing connections...")
             for fileno, connection in connections.items():
                 closeConnection(fileno)
 
-            del connections
-
+            # Unregister our server socket with our epoll
             epoll.unregister(self.socket.fileno())
+
+            # Close our epoll
             epoll.close()
+
+            # Close our socket server
             self.socket.close()

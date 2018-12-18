@@ -48,12 +48,12 @@ Running the Server
 
 ::
 
-    $ pipenv run server   # Run server
+    $ pipenv run server -vv   # Run server
 ..
 Running the Client
 ==================
 
 ::
 
-    $ pipenv run client   # Run client
+    $ pipenv run client -vv   # Run client
 ..
