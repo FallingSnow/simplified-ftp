@@ -1,8 +1,11 @@
 [scripts]
-server = "python ./src/ server"
-client = "python ./src/ client"
+server = "python ./src/simplified_ftp server"
+client = "python ./src/simplified_ftp client"
+docs = "sphinx-build docs docs/_build"
 
 [dev-packages]
+sphinxcontrib-napoleon = "*"
+sphinx = "*"
 
 [packages]
 crc32c = "*"

@@ -78,16 +78,33 @@ def setup_logging(loglevel):
                         format=logformat, datefmt="%Y-%m-%d %H:%M:%S")
 
 
-def start_client(args):
+def start_client(port, host):
+    """Start a client
+
+    Args:
+      port (int): port to connect to the server on
+      host (str): ip of the server to connect to
+
+    Returns:
+      :class:`client.Client`: a connected client
+    """
     client = Client(_logger, {})
-    client.connect(args.port, args.host)
+    client.connect(port, host)
 
     return client
 
 
-def start_server(args):
+def start_server(port):
+    """Start a client
+
+    Args:
+      port (int): port number that the server should listen on
+
+    Returns:
+      :class:`server.Server`: a listening server
+    """
     server = Server(_logger, {})
-    server.listen(args.port)
+    server.listen(port)
 
     return server
 
@@ -103,9 +120,9 @@ def main(args):
     _logger.debug("Starting client...")
 
     if args.system == 'server':
-        connection = start_server(args)
+        connection = start_server(args.port)
     elif args.system == 'client':
-        connection = start_client(args)
+        connection = start_client(args.port, args.host)
         if args.send:
             connection.commandQueue.put(connection.sendFile(args.send))
 

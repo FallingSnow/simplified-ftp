@@ -38,6 +38,10 @@ MESSAGE_FORMATS = {
 }
 
 
+def calculateCheckSum(bytes):
+    return hex(crc32(bytes))[2:].zfill(8).upper()
+
+
 class Message:
     PROTOCOL_FORMAT = "{protocol}/{version} {id} {type}"
     VERSION = "0.1"
@@ -67,8 +71,6 @@ class Message:
 
     def fromBytes(bytes):
 
-        print(bytes)
-
         assert len(bytes) >= Message.MINIMUM_SIZE
 
         params = {}
@@ -78,12 +80,12 @@ class Message:
         checksum = bytes[-8:].decode('utf-8')
 
         # Calculate our own checksum for the message and convert it to hex
-        calculatedChecksum = hex(crc32(bytes[:-8]))[2:]
+        calculatedChecksum = calculateCheckSum(bytes[:-8])
 
         # Check if our calculated checksum matches the checksum provided in the
         # message.
         if checksum != calculatedChecksum:
-            raise RuntimeError("Invalid checksum: {} != {}".format(
+            raise RuntimeError("Invalid message checksum: {} != {}".format(
                 checksum, calculatedChecksum))
 
         # Protocol is the first 6 bytes (SimFTP), first 6 characters
@@ -142,7 +144,7 @@ class Message:
             bytes += self.content + " ".encode('utf-8')
 
         # Calculate and append the crc32 checksum in hex
-        bytes += "{}\0".format(hex(crc32(bytes))[2:]).encode('utf-8')
+        bytes += "{}\0".format(calculateCheckSum(bytes)).encode('utf-8')
 
         # Ensure our message fufills the basic requirements
         assert len(bytes) >= Message.MINIMUM_SIZE

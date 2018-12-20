@@ -6,8 +6,24 @@ import select
 import os
 
 
+def read(file, offset, size):
+    file.seek(offset)
+    fileBuffer = file.read(size)
+    offset += len(fileBuffer)
+    return offset, fileBuffer
+
+
 class Client:
     def __init__(self, logger, config):
+        """Creates a client
+
+        Args:
+          logger (obj): A logger with a info and debug method
+          config (obj): configuration options
+
+        Returns:
+          :class:`Client`: a client
+        """
         self._logger = logger
         self.messageCounter = 0
 
@@ -49,14 +65,13 @@ class Client:
 
         # Open a file to read from
         with open(filepath, 'rb') as file:
-            file.seek(offset)
-            fileBuffer = file.read(segmentSize)
-            offset += len(fileBuffer)
+
+            # Create file start message
+            offset, fileBuffer = read(file, offset, segmentSize)
             yield Message(id=self.getMessageId(), type=MessageType.FileStart, filename=filename, content=fileBuffer)
 
-            file.seek(offset)
-            fileBuffer = file.read(segmentSize)
-            offset += len(fileBuffer)
+            # Create file part or file end message depending on size of fileBuffer
+            offset, fileBuffer = read(file, offset, segmentSize)
             while len(fileBuffer) != 0:
                 if len(fileBuffer) < segmentSize:
                     yield Message(id=self.getMessageId(), type=MessageType.FileEnd, content=fileBuffer)
@@ -64,10 +79,12 @@ class Client:
                     break
                 else:
                     yield Message(id=self.getMessageId(), type=MessageType.FilePart, content=fileBuffer)
-                    file.seek(offset)
-                    fileBuffer = file.read(segmentSize)
-                    offset += len(fileBuffer)
+                    offset, fileBuffer = read(file, offset, segmentSize)
+
+            # Close our file
             file.close()
+
+        # If we happened to send the entire file but not send a file end, lets do that now
         if not endSent:
             yield Message(id=self.getMessageId(), type=MessageType.FileEnd, content=b"")
 
@@ -80,6 +97,7 @@ class Client:
         epoll.register(self.socket.fileno(), select.EPOLLOUT)
         try:
             while not self.done:
+                # Get any epoll events, return [] if none are found by event_timeout
                 events = epoll.poll(self.config['event_timeout'])
 
                 # Process events from epoll
@@ -97,9 +115,10 @@ class Client:
                             # to get all of their messages.
                             for message in command:
                                 transmittingMessages[message.id] = message
+                                msgBytes = message.toBytes()
                                 self._logger.debug(
-                                    "Sending: {}".format(message.toBytes()))
-                                self.socket.send(message.toBytes())
+                                    "Sending: {}".format(msgBytes))
+                                self.socket.send(msgBytes)
 
                         except queue.Empty:
                             continue
@@ -115,3 +134,5 @@ class Client:
             epoll.unregister(self.socket.fileno())
             epoll.close()
             self.socket.close()
+
+            self._logger.info("Client shutdown")
