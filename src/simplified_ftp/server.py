@@ -13,8 +13,6 @@ class Connection:
         # Create a buffer byte array for our client
         self.buffer = b""
         self.responses = {}
-        self.lostMessages = set()
-        self.lastMessageId = 0
         self.file = False
         self.fileroot = fileroot
 
@@ -26,15 +24,6 @@ class Connection:
             self.file.close()
 
     def processMessage(self, message):
-
-        # Keep track of any non sequental messages
-        for lostId in range(self.lastMessageId + 1, message.id):
-            self.lostMessages.add(lostId)
-        self.lastMessageId = message.id
-
-        # If our message was in listMessages, lets remove it
-        # This can happen if messages arrive out of sequential id order
-        self.lostMessages.discard(message.id)
 
         # ### Process the message depending on what type of message it is
         if message.type == MessageType.FileStart:
@@ -236,7 +225,6 @@ class Server:
                     # Endpoint has closed the connection (No need to send shutdown)
                     elif event & select.EPOLLHUP:
                         self._logger.debug("Connection to [{}] closed!".format(connections[fileno].address))
-                        self._logger.debug("Lost packets: {}".format(connections[fileno].lostMessages))
                         epoll.unregister(fileno)
                         connections[fileno].close()
                         del connections[fileno]

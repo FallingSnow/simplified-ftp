@@ -8,7 +8,6 @@ sphinxcontrib-napoleon = "*"
 sphinx = "*"
 
 [packages]
-crc32c = "*"
 
 [requires]
 python_version = "3.7"

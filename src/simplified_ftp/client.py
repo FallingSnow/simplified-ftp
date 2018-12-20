@@ -25,7 +25,6 @@ class Client:
           :class:`Client`: a client
         """
         self._logger = logger
-        self.messageCounter = 0
 
         # Setup config with defaults
         self.config = {
@@ -41,10 +40,6 @@ class Client:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.done = False
-
-    def getMessageId(self):
-        self.messageCounter += 1
-        return self.messageCounter
 
     def connect(self, port, addr='127.0.0.1'):
         self.socket.connect((addr, port))
@@ -68,17 +63,17 @@ class Client:
 
             # Create file start message
             offset, fileBuffer = read(file, offset, segmentSize)
-            yield Message(id=self.getMessageId(), type=MessageType.FileStart, filename=filename, content=fileBuffer)
+            yield Message(type=MessageType.FileStart, filename=filename, content=fileBuffer)
 
             # Create file part or file end message depending on size of fileBuffer
             offset, fileBuffer = read(file, offset, segmentSize)
             while len(fileBuffer) != 0:
                 if len(fileBuffer) < segmentSize:
-                    yield Message(id=self.getMessageId(), type=MessageType.FileEnd, content=fileBuffer)
+                    yield Message(type=MessageType.FileEnd, content=fileBuffer)
                     endSent = True
                     break
                 else:
-                    yield Message(id=self.getMessageId(), type=MessageType.FilePart, content=fileBuffer)
+                    yield Message(type=MessageType.FilePart, content=fileBuffer)
                     offset, fileBuffer = read(file, offset, segmentSize)
 
             # Close our file
@@ -86,11 +81,9 @@ class Client:
 
         # If we happened to send the entire file but not send a file end, lets do that now
         if not endSent:
-            yield Message(id=self.getMessageId(), type=MessageType.FileEnd, content=b"")
+            yield Message(type=MessageType.FileEnd, content=b"")
 
     def loop(self):
-        transmittingMessages = {}
-
         # See http://scotdoyle.com/python-epoll-howto.html for a detailed
         # explination on the epoll interface
         epoll = select.epoll()
@@ -114,7 +107,6 @@ class Client:
                             # Commands are generators so we can iterate over them
                             # to get all of their messages.
                             for message in command:
-                                transmittingMessages[message.id] = message
                                 msgBytes = message.toBytes()
                                 self._logger.debug(
                                     "Sending: {}".format(msgBytes))
