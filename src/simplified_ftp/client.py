@@ -112,6 +112,9 @@ class Client:
                                     "Sending: {}".format(msgBytes))
                                 self.socket.send(msgBytes)
 
+                                # After download message switch to epoll in
+                                # epoll.modify(fileno, EPOLIN)
+
                         except queue.Empty:
                             continue
 

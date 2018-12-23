@@ -8,7 +8,7 @@ A class project for CPSC 471 implementing a simplified FTP client and server.
 Description
 ===========
 
-Located in the :code:`src` folder there is a ftp :code:`client` and ftp :code:`server`.
+Located in the :code:`src/simplified_ftp` folder there is a ftp :code:`client` and ftp :code:`server`.
 
 Client
 ______

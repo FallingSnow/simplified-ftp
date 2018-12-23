@@ -19,11 +19,12 @@ from enum import IntFlag, unique
 # Define message types that can be transmitted or received
 @unique
 class MessageType(IntFlag):
-    FileStart = int('0000_0001', 2)
-    FilePart = int('0000_0010', 2)
-    FileEnd = int('0000_0100', 2)
-    File = FileStart | FilePart | FileEnd
-    Error = int('1000_0000', 2)
+    FileStart = int('0000_0001', 2)  # 1
+    FilePart = int('0000_0010', 2)  # 2
+    FileEnd = int('0000_0100', 2)  # 4
+    Download = int('0001_0000', 2)  # 8
+    File = FileStart | FilePart | FileEnd  # 7
+    Error = int('1000_0000', 2)  # 128
 
 
 # Message formats are the layout for each packet of a certain message type
@@ -31,6 +32,7 @@ MESSAGE_FORMATS = {
     MessageType.FileStart: "{self.protocol}/{self.version} {self.type} {self.filename} ",
     MessageType.FilePart: "{self.protocol}/{self.version} {self.type} ",
     MessageType.FileEnd: "{self.protocol}/{self.version} {self.type} ",
+    MessageType.Download: "{self.protocol}/{self.version} {self.type} {self.filename} ",
 }
 
 
@@ -55,7 +57,7 @@ class Message:
         self.type = params['type']
 
         # Define addition properties on message based on message type
-        if self.type == MessageType.FileStart:
+        if self.type == MessageType.FileStart or self.type == MessageType.Download:
             self.filename = params['filename']
         if self.type in MessageType.File:
             self.content = params['content']
@@ -94,6 +96,10 @@ class Message:
                 "Unknown protocol version: {}".format(version.decode()))
 
         # Add additional properties to the message depending on message type
+        if params['type'] == MessageType.Download:
+            filenameEnd = bytes.find(b' ', typeEnd + 1)
+            params['filename'] = bytes[typeEnd + 1:filenameEnd].decode('utf-8')
+
         if params['type'] == MessageType.FileStart:
             filenameEnd = bytes.find(b' ', typeEnd + 1)
             params['filename'] = bytes[typeEnd + 1:filenameEnd].decode('utf-8')
